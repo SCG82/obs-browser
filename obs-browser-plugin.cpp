@@ -256,7 +256,10 @@ static void BrowserInit(void)
 	CefString(&settings.accept_language_list) = accepted_languages;
 	CefString(&settings.cache_path) = conf_path_abs;
 	CefString(&settings.browser_subprocess_path) = path;
-
+#ifdef MFC_BROWSER_AVAILABLE
+	// to attach the chrome debug tools: http://localhost:8080
+	settings.remote_debugging_port = 8080;
+#endif
 	bool tex_sharing_avail = false;
 
 #if EXPERIMENTAL_SHARED_TEXTURE_SUPPORT_ENABLED
