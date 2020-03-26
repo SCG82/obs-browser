@@ -24,6 +24,12 @@
 #include <obs.hpp>
 #include <util/platform.h>
 
+#ifdef MFC_BROWSER_AVAILABLE
+#include <libPlugins/IPCShared.h>
+MFC_Shared_Mem::CMessageManager g_LocalBrowserMemManager;
+void MfcDebug(const char *pCaption, const char *pFmt, ...);
+#endif
+
 using namespace json11;
 
 BrowserClient::~BrowserClient()
@@ -128,7 +134,30 @@ bool BrowserClient::OnProcessMessageReceived(
 			{"streaming", obs_frontend_streaming_active()},
 			{"recordingPaused", obs_frontend_recording_paused()},
 			{"replaybuffer", obs_frontend_replay_buffer_active()}};
+#ifdef MFC_BROWSER_AVAILABLE
+	} else if (name == "credentials") {
+		MfcDebug("BrowserClient::OnProcessMessageReceived",
+			 "credentials");
 
+		if (message->GetArgumentList()->GetSize() > 0) {
+			std::string sJsonArg =
+				message->GetArgumentList()->GetString(0);
+			MfcDebug("OnProcessMessageReceived", sJsonArg.c_str());
+			if (!g_LocalBrowserMemManager.isInitialized())
+				g_LocalBrowserMemManager.init(false);
+
+			CefRefPtr<CefListValue> args =
+				message->GetArgumentList();
+			std::string sJson = args->GetString(0);
+
+			// send message directly to the broadcast plugin,
+			g_LocalBrowserMemManager.sendMessage(
+				MFC_Shared_Mem::CSharedMemMsg(
+					ADDR_OBS_BROADCAST_Plugin,
+					ADDR_CEF_JSEXTENSION,
+					MSG_TYPE_DOCREDENTIALS, sJson.c_str()));
+		}
+#endif
 	} else if (name == "saveReplayBuffer") {
 		obs_frontend_replay_buffer_save();
 	} else {

@@ -31,6 +31,23 @@
 #include <QTimer>
 #endif
 
+#ifdef MFC_BROWSER_AVAILABLE
+#include <libPlugins/IPCShared.h>
+#include "MfcJsExtensions.h"
+MFC_Shared_Mem::CMessageManager g_LocalRenderMemManager;
+void MfcDebug(const char *pCaption, const char *pFmt, ...)
+{
+#ifdef MFC_BROWSER_DEBUG
+	va_list args;
+	va_start(args, pFmt);
+	char buf[1024] = {'\0'};
+	vsnprintf(buf, 1023, pFmt, args);
+	va_end(args);
+	MessageBoxA(NULL, buf, pCaption, MB_OK);
+#endif
+}
+#endif
+
 using namespace json11;
 
 CefRefPtr<CefRenderProcessHandler> BrowserApp::GetRenderProcessHandler()
@@ -106,9 +123,13 @@ void BrowserApp::OnBeforeCommandLineProcessing(
 }
 
 void BrowserApp::OnContextCreated(CefRefPtr<CefBrowser> browser,
-				  CefRefPtr<CefFrame>,
+				  CefRefPtr<CefFrame> frame,
 				  CefRefPtr<CefV8Context> context)
 {
+#ifdef MFC_BROWSER_AVAILABLE
+	MfcDebug("BrowserApp::OnContextCreated", "Attach Debugger now");
+	cefJSExtensionBase::addMFCExtensions(browser, frame, context);
+#endif
 	CefRefPtr<CefV8Value> globalObj = context->GetGlobal();
 
 	CefRefPtr<CefV8Value> obsStudioObj = CefV8Value::CreateObject(0, 0);
@@ -347,15 +368,22 @@ bool BrowserApp::OnProcessMessageReceived(CefRefPtr<CefBrowser> browser,
 		callbackMap.erase(callbackID);
 
 	} else {
+#ifdef MFC_BROWSER_AVAILABLE
+		std::string s = message->GetName();
+#ifdef _WIN32
+		MessageBoxA(NULL, "browser-app.cpp OnProcessMessageReceived",
+			    s.c_str(), MB_OK);
+#endif
+#endif
 		return false;
 	}
 
 	return true;
 }
 
-bool BrowserApp::Execute(const CefString &name, CefRefPtr<CefV8Value>,
+bool BrowserApp::Execute(const CefString &name, CefRefPtr<CefV8Value> object,
 			 const CefV8ValueList &arguments,
-			 CefRefPtr<CefV8Value> &, CefString &)
+			 CefRefPtr<CefV8Value> &retval, CefString &)
 {
 	if (name == "getCurrentScene" || name == "getStatus" ||
 	    name == "saveReplayBuffer") {
@@ -374,6 +402,14 @@ bool BrowserApp::Execute(const CefString &name, CefRefPtr<CefV8Value>,
 		SendBrowserProcessMessage(browser, PID_BROWSER, msg);
 
 	} else {
+#ifdef MFC_BROWSER_AVAILABLE
+		MfcDebug("BrowserApp::Execute", "ext name=%s", name.c_str());
+		if (cefJSExtensionBase::processMFCExtensions(name, object,
+							     arguments,
+							     retval)) {
+			return true;
+		}
+#endif
 		/* Function does not exist. */
 		return false;
 	}
